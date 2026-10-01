@@ -1,0 +1,35 @@
+using System.Security.Claims;
+using LlmHub.Api.Authentication;
+using Microsoft.AspNetCore.Http;
+
+namespace LlmHub.IntegrationTests.Security;
+
+public sealed class ScopeAuthorizationMiddlewareTests
+{
+    [Fact]
+    public async Task ReadScopeAllowsReadButNotSend()
+    {
+        var middleware = new ScopeAuthorizationMiddleware(context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status204NoContent;
+            return Task.CompletedTask;
+        });
+        var read = Context("GET", "/v1/channels/chn_1", "hub.read");
+        var send = Context("POST", "/v1/channels/chn_1/messages", "hub.read");
+
+        await middleware.InvokeAsync(read);
+        await middleware.InvokeAsync(send);
+
+        Assert.Equal(StatusCodes.Status204NoContent, read.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status403Forbidden, send.Response.StatusCode);
+    }
+
+    private static DefaultHttpContext Context(string method, string path, string scope)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = method;
+        context.Request.Path = path;
+        context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scope", scope)], "test"));
+        return context;
+    }
+}

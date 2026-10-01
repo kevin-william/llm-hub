@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\LlmHub.Contracts\LlmHub.Contracts.csproj" />
+    <ProjectReference Include="..\LlmHub.Domain\LlmHub.Domain.csproj" />
+  </ItemGroup>
+</Project>

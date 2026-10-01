@@ -1,0 +1,114 @@
+## .NET / Visual Studio build artifacts
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+build/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+*.vsp
+*.vspx
+*.sapwireless
+*.sapphire
+*.sln.ide
+
+## Rider / ReSharper / dotCover
+.idea/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+*.DotSettings
+*.dotCover
+
+## Test results / coverage
+TestResults/
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+coverage/
+coverage.*.xml
+coverage.*.json
+.coverage
+*.trx
+
+## NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+## .NET CLI tools
+.dotnet/
+.config/
+.tools/
+**/.tools/
+
+## Secrets / local config
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+secrets.*.json
+
+## OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+## Logs / runtime
+*.log
+*.pid
+*.seed
+*.pid.lock
+*.pidfile
+
+## Docker
+.docker/
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+
+## Redis / data volumes
+redis-data/
+postgres-data/
+*.sqlite
+*.sqlite3
+*.db
+
+## OpenCode / worker artifacts
+.opencode/
+.opencode-cache/
+**/opencode.log
+**/opencode-*.log
+worker-outbox/
+worker-artifacts/
+
+## Misc
+*.swp
+*.bak
+*.tmp
+*.orig
+.tmp/
+.cache/
