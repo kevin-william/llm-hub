@@ -112,3 +112,6 @@ worker-artifacts/
 *.orig
 .tmp/
 .cache/
+
+docs/
+docs/*
