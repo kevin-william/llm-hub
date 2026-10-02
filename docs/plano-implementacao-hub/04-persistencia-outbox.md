@@ -1,7 +1,7 @@
 # 04 — Persistência transacional e outbox
 
 > **Status:** Em andamento  
-> **Progresso:** 85%  
+> **Progresso:** 95%  
 > **Dependências:** 03  
 > **Commit único:** `feat(persistence): persistir lifecycle e outbox`
 
@@ -84,8 +84,8 @@ dotnet build LlmHub.sln --configuration Release
 | Item | Status |
 |---|---|
 | Implementação | Modelo EF Core, aceitação transacional e migration inicial concluídos |
-| Testes | Aprovados em banco efêmero e PostgreSQL Docker para idempotência; migrations aplicadas e conferidas; cenários concorrentes reais pendentes |
+| Testes | Aprovados em banco efêmero e PostgreSQL Docker para idempotência, reenvio concorrente e disputa de canal serial; migrations aplicadas e conferidas |
 | Documentação | Concluída |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 90%
+**Progresso geral:** 95%. Falta apenas validar esse comportamento sob a carga esperada de produção.

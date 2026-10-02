@@ -1,7 +1,7 @@
 # 15 — OAuth, escopos e isolamento por tenant
 
 > **Status:** Em andamento  
-> **Progresso:** 55%  
+> **Progresso:** 80%  
 > **Dependências:** 13  
 > **Commit único:** `feat(security): aplicar oauth escopos e tenancy`
 
@@ -70,9 +70,9 @@ dotnet build LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | Isolamento por participação, validação JWT/OIDC configurável, principal por `sub` e scopes por rota implementados; tenant formal e tokens de worker pendentes |
-| Testes | Leitura cruzada e aplicação de scope para leitura/envio cobertas |
+| Implementação | Isolamento por participação na API HTTP e MCP, validação JWT/OIDC configurável, principal por `sub`, tenant persistido em canal/endpoint/worker, scopes por rota e vínculo `worker_id`→registro/run implementados; emissão rotacionável de tokens pendente |
+| Testes | Leitura e cancelamento cruzados, inclusive via MCP, escopos, acesso entre tenants e isolamento de worker por registro/run cobertos |
 | Documentação | Configuração OIDC e scopes documentados em `docs/autenticacao-autorizacao.md` |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 55%. Faltam configurar o provedor OIDC, tenant explícito e identidade de serviço rotacionável para workers.
+**Progresso geral:** 80%. Faltam configurar o provedor OIDC por ambiente e a emissão rotacionável de tokens de serviço para workers.

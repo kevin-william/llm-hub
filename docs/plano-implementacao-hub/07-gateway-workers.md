@@ -1,7 +1,7 @@
 # 07 — Gateway de workers, claims e leases
 
 > **Status:** Em andamento  
-> **Progresso:** 85%  
+> **Progresso:** 95%  
 > **Dependências:** 05, 06  
 > **Commit único:** `feat(workers): adicionar claims leases e heartbeats`
 
@@ -84,8 +84,8 @@ dotnet build LlmHub.sln --configuration Release
 | Item | Status |
 |---|---|
 | Implementação | Registro, claims, leases, heartbeat, complete e fail implementados |
-| Testes | Fencing aprovado em banco efêmero; concorrência PostgreSQL pendente |
+| Testes | Fencing aprovado em banco efêmero e claim concorrente aprovado em PostgreSQL Docker |
 | Documentação | Concluída |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 85%
+**Progresso geral:** 95%. Falta validar a política de identidade de worker em ambiente de produção.

@@ -12,12 +12,20 @@ public static class HubTelemetry
     public static readonly Counter<long> WebhookRetries = Meter.CreateCounter<long>("hub.webhooks.retries");
     public static readonly Counter<long> ExpiredLeases = Meter.CreateCounter<long>("hub.leases.expired");
 
-    public static Activity? Start(string operation, string? channelId = null, string? messageId = null, string? runId = null, string? eventId = null, string? deliveryId = null)
+    public static Activity? Start(
+        string operation,
+        string? channelId = null,
+        string? messageId = null,
+        string? runId = null,
+        string? attemptId = null,
+        string? eventId = null,
+        string? deliveryId = null)
     {
         var activity = ActivitySource.StartActivity(operation);
         activity?.SetTag("channel_id", channelId);
         activity?.SetTag("message_id", messageId);
         activity?.SetTag("run_id", runId);
+        activity?.SetTag("attempt_id", attemptId);
         activity?.SetTag("event_id", eventId);
         activity?.SetTag("delivery_id", deliveryId);
         return activity;

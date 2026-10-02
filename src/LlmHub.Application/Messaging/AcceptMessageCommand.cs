@@ -8,7 +8,8 @@ public sealed record AcceptMessageCommand(
     string ClientMessageId,
     string Content,
     bool AwaitResponse,
-    IReadOnlyList<string>? Attachments = null);
+    IReadOnlyList<string>? Attachments = null,
+    string TenantId = "tenant:development");
 
 public sealed record AcceptMessageResult(string MessageId, string RunId, long Sequence, bool IsReplay);
 

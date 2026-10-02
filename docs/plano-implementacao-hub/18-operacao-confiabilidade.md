@@ -1,7 +1,7 @@
 # 18 — Quotas, retenção e confiabilidade operacional
 
 > **Status:** Em andamento  
-> **Progresso:** 25%  
+> **Progresso:** 60%  
 > **Dependências:** 15, 16, 17  
 > **Commit único:** `feat(operations): aplicar quotas retenção e recuperação`
 
@@ -77,9 +77,9 @@ dotnet test LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | Quotas configuráveis de mensagem, anexos e runs ativos por principal implementadas |
-| Testes | Rejeição sem criação de trabalho coberta |
-| Documentação | Limites e variáveis de ambiente documentados em `docs/operacao-retencao.md` |
+| Implementação | Quotas configuráveis para mensagem, anexo, run, canal e callback, além do job de retenção de auditoria/deliveries terminais, implementadas |
+| Testes | Rejeição sem criação de trabalho para quotas de entrada, canais e callbacks, retenção seletiva e recuperação ponta a ponta de worker interrompido cobertas |
+| Documentação | Limites, retenção e variáveis de ambiente documentados em `docs/operacao-retencao.md` |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 25%. Retenção, backups, rotação e cenários de caos ainda dependem de política operacional aprovada.
+**Progresso geral:** 60%. Backups, quotas de custo/tokens e cenários de caos em ambiente de produção ainda dependem de política operacional aprovada.

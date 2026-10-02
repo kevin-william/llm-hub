@@ -13,5 +13,6 @@
     <ProjectReference Include="..\..\src\LlmHub.Domain\LlmHub.Domain.csproj" />
     <ProjectReference Include="..\..\src\LlmHub.Api\LlmHub.Api.csproj" />
     <ProjectReference Include="..\..\src\LlmHub.Infrastructure\LlmHub.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\LlmHub.Workers\LlmHub.Workers.csproj" />
   </ItemGroup>
 </Project>

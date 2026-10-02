@@ -67,6 +67,24 @@ public sealed class MessageAcceptanceTests
         await using var context = await factory.CreateDbContextAsync(CancellationToken.None);
         Assert.Empty(context.Messages);
         Assert.Empty(context.Runs);
+        Assert.Contains(context.AuditEvents, audit => audit.EventName == "quota.message.rejected");
+    }
+
+    [Fact]
+    public async Task ChannelQuotaRejectsNewChannelsForTheSamePrincipal()
+    {
+        var factory = CreateFactory();
+        var service = new PostgresChannelService(factory, new HubQuotaOptions(MaxChannelsPerPrincipal: 1));
+
+        await service.CreateAsync(new LlmHub.Application.Channels.CreateChannelCommand(
+            "principal:chatgpt/user-1", "agent:opencode/default", null, null), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<DomainException>(() => service.CreateAsync(
+            new LlmHub.Application.Channels.CreateChannelCommand("principal:chatgpt/user-1", "agent:echo/default", null, null), CancellationToken.None));
+
+        Assert.Equal("CHANNEL_QUOTA_EXCEEDED", exception.Message);
+        await using var context = await factory.CreateDbContextAsync(CancellationToken.None);
+        Assert.Contains(context.AuditEvents, audit => audit.EventName == "quota.channels.rejected");
     }
 
     private static TestDbContextFactory CreateFactory()

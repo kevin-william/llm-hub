@@ -1,7 +1,7 @@
 # 17 — Observabilidade e auditoria de decisões
 
 > **Status:** Em andamento  
-> **Progresso:** 65%  
+> **Progresso:** 70%  
 > **Dependências:** 14  
 > **Commit único:** `feat(observability): rastrear operações e decisões`
 
@@ -75,9 +75,9 @@ dotnet build LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | ActivitySource, Meter e auditoria persistida para rota, claim, conclusão, lease e entrega implementados |
-| Testes | Correlação e redaction de prompt cobertas |
+| Implementação | ActivitySource, Meter e auditoria persistida para rota, claim, conclusão, lease, entrega e recusa de quota implementados; claims incluem `attempt_id` |
+| Testes | Correlação de `attempt_id`, auditoria de quota e redaction de prompt cobertas |
 | Documentação | Catálogo de campos e métricas criado em `docs/observabilidade.md` |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 65%. Exporter, retenção, dashboards e alertas por ambiente ainda dependem de decisão operacional.
+**Progresso geral:** 70%. Exporter, retenção, dashboards e alertas por ambiente ainda dependem de decisão operacional.

@@ -1,7 +1,7 @@
 # 14 — Fluxo ChatGPT → OpenCode → ChatGPT
 
 > **Status:** Em andamento  
-> **Progresso:** 65%  
+> **Progresso:** 85%  
 > **Dependências:** 10, 11, 12, 13  
 > **Commit único:** `test(e2e): cobrir fluxo chatgpt opencode chatgpt`
 
@@ -77,8 +77,8 @@ dotnet test LlmHub.sln --configuration Release
 | Item | Status |
 |---|---|
 | Implementação | Fluxo HTTP, worker controlado, persistência da resposta e dispatcher de webhook integrados em ambiente controlado |
-| Testes | Cobrem inscrição anterior, conclusão, callback com cursor/evento e rejeição de await sem inscrição |
+| Testes | Cobrem inscrição anterior, conclusão, callback com cursor/evento, rejeição de await sem inscrição, repetição de processamento e callback lento sem duplicar entrega |
 | Documentação | Roteiro MVP criado em `docs/fluxo-mvp.md` |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 65%. Ainda faltam o adapter OpenCode concreto e cenários explícitos de callback lento e duplicata de delivery.
+**Progresso geral:** 85%. Ainda falta o adapter OpenCode concreto.

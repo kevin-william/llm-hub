@@ -1,7 +1,7 @@
 # 16 — Proteções de callback e segredo de webhook
 
 > **Status:** Em andamento  
-> **Progresso:** 90%  
+> **Progresso:** 95%  
 > **Dependências:** 12  
 > **Commit único:** `feat(security): endurecer callbacks e segredos`
 
@@ -79,9 +79,9 @@ dotnet build LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | Assinatura, timestamp, timeout, bloqueio de redirects/proxy, política SSRF/DNS, segredo criptografado com AES-GCM, desafio de callback e limite de payload concluídos |
-| Testes | Concluídos para assinatura, segredo cifrado/adulterado, desafio recusado, estabilidade entre retries, payload excessivo e destinos hostis |
+| Implementação | Assinatura, timestamp, timeout, bloqueio de redirects/proxy, política SSRF/DNS, segredo criptografado com AES-GCM e rotação por chave primária/anterior, desafio de callback e limite de payload concluídos |
+| Testes | Concluídos para assinatura, segredo cifrado/adulterado, troca de chave, desafio recusado, estabilidade entre retries, payload excessivo e destinos hostis |
 | Documentação | Catálogo atualizado em `docs/eventos-e-webhooks.md` |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 90%. Falta validar o contrato de desafio contra consumidores externos reais e definir rotação de chaves.
+**Progresso geral:** 95%. Falta validar o contrato de desafio contra consumidores externos reais.

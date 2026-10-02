@@ -1,6 +1,7 @@
 using System.Net;
 using LlmHub.Api.McpEventsProbe;
 using LlmHub.Infrastructure.Webhooks;
+using LlmHub.Infrastructure.Artifacts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,8 @@ namespace LlmHub.IntegrationTests.Api;
 public sealed class HubApiFactory : WebApplicationFactory<Program>
 {
     public ProbeCallbackClient ProbeCallbacks { get; } = new();
+
+    public TestArtifactStore ArtifactStore { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -26,6 +29,7 @@ public sealed class HubApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<IMcpEventsProbeCallbackClient>(ProbeCallbacks);
             services.RemoveAll<IWebhookVerificationClient>();
             services.AddSingleton<IWebhookVerificationClient>(new VerifiedWebhookCallback());
+            services.AddSingleton<IArtifactStore>(ArtifactStore);
         });
     }
 
@@ -47,5 +51,26 @@ public sealed class HubApiFactory : WebApplicationFactory<Program>
     private sealed class VerifiedWebhookCallback : IWebhookVerificationClient
     {
         public Task<bool> VerifyAsync(Uri callback, string challenge, CancellationToken cancellationToken) => Task.FromResult(true);
+    }
+
+    public sealed class TestArtifactStore : IArtifactStore
+    {
+        public List<StoredArtifact> UploadedArtifacts { get; } = [];
+
+        public Task<StoredArtifact> PutAsync(ReadOnlyMemory<byte> content, string contentType, string? expectedSha256, CancellationToken cancellationToken)
+        {
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content.Span)).ToLowerInvariant();
+            if (expectedSha256 is not null && !string.Equals(hash, expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArtifactValidationException("Artifact checksum does not match its content.");
+            }
+
+            var artifact = new StoredArtifact($"sha256/{hash}", hash, contentType, content.Length);
+            UploadedArtifacts.Add(artifact);
+            return Task.FromResult(artifact);
+        }
+
+        public Task<byte[]> GetAsync(string storageKey, CancellationToken cancellationToken)
+            => Task.FromResult(System.Text.Encoding.UTF8.GetBytes($"artifact:{storageKey}"));
     }
 }

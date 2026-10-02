@@ -19,3 +19,5 @@ $env:Webhook__SecretEncryptionKey = [Convert]::ToBase64String([Security.Cryptogr
 ```
 
 `GET /health` confirma que a API iniciou. PostgreSQL, Redis e o armazenamento S3 compatível local são expostos nas portas 5432, 6379, 9000 e 9001. A variável `Webhook__SecretEncryptionKey` é obrigatória para criar inscrições de webhook e deve vir de um cofre de segredos fora do ambiente de desenvolvimento.
+
+A API aplica as migrations pendentes quando `Database__ApplyMigrations=true`, configuração adequada para o ambiente local. Em produção, execute-as em uma etapa controlada de implantação ou mantenha essa configuração habilitada somente em uma instância responsável pela atualização do schema.

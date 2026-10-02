@@ -1,7 +1,7 @@
 # 11 — Artefatos e sessões persistentes
 
 > **Status:** Em andamento  
-> **Progresso:** 60%  
+> **Progresso:** 85%  
 > **Dependências:** 04, 10  
 > **Commit único:** `feat(artifacts): persistir resultados e sessões de agentes`
 
@@ -73,9 +73,9 @@ dotnet build LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | Storage S3/MinIO com hash, checksum, tipos e limite de tamanho, sessão por canal/adapter e persistência transacional de metadados na conclusão implementados; leitura autorizada pela API pendente |
-| Testes | Escrita/leitura real em MinIO, checksum inválido, recuperação da sessão e complete idempotente cobertos |
+| Implementação | Storage S3/MinIO com hash, checksum, tipos e limite de tamanho, upload autenticado de worker, sessão por canal/adapter, persistência transacional de metadados e leitura autorizada pela API implementados |
+| Testes | Escrita/leitura real em MinIO, checksum inválido, upload de worker, recuperação da sessão, complete idempotente e leitura autorizada cobertos |
 | Documentação | Configuração e limites do storage documentados |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 60%. Falta expor leitura autorizada pela API junto da camada de tenant.
+**Progresso geral:** 85%. Falta validar a rota com credenciais OIDC reais e definir a retenção definitiva de artefatos.

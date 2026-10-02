@@ -8,7 +8,10 @@ using LlmHub.OpenCodeWorker;
 var builder = Host.CreateApplicationBuilder(args);
 var postgres = builder.Configuration.GetConnectionString("Hub")
     ?? throw new InvalidOperationException("ConnectionStrings:Hub is required by the OpenCode worker.");
-builder.Services.AddHubPersistence(postgres, builder.Configuration["Webhook:SecretEncryptionKey"]);
+builder.Services.AddHubPersistence(
+    postgres,
+    builder.Configuration["Webhook:SecretEncryptionKey"],
+    builder.Configuration["Webhook:PreviousSecretEncryptionKeys"]);
 builder.Services.AddSingleton<IAgentAdapter, OpenCodeAdapter>();
 builder.Services.AddSingleton(new OpenCodeWorkerOptions(
     builder.Configuration["OpenCodeWorker:WorkerId"] ?? $"opencode-{Environment.MachineName}",

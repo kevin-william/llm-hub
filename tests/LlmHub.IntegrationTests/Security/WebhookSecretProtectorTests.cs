@@ -28,6 +28,32 @@ public sealed class WebhookSecretProtectorTests
     }
 
     [Fact]
+    public void NewPrimaryKeyDecryptsSecretsWrittenWithThePreviousKey()
+    {
+        const string previousKey = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+        const string primaryKey = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
+        var previous = new AesGcmWebhookSecretProtector(previousKey);
+        var rotating = new AesGcmWebhookSecretProtector(primaryKey, [previousKey]);
+
+        var previousSecret = previous.Protect("whsec_previous");
+        var newSecret = rotating.Protect("whsec_current");
+
+        Assert.Equal("whsec_previous", rotating.Unprotect(previousSecret));
+        Assert.Equal("whsec_current", rotating.Unprotect(newSecret));
+        Assert.StartsWith("v2:", newSecret, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MissingPreviousKeyRejectsOlderSecrets()
+    {
+        const string previousKey = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+        const string primaryKey = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
+        var oldSecret = new AesGcmWebhookSecretProtector(previousKey).Protect("whsec_previous");
+
+        Assert.Throws<WebhookSecretProtectionException>(() => new AesGcmWebhookSecretProtector(primaryKey).Unprotect(oldSecret));
+    }
+
+    [Fact]
     public void MissingKeyDoesNotAllowPlaintextFallback()
     {
         Assert.Throws<WebhookSecretProtectionException>(() => new UnavailableWebhookSecretProtector().Protect("whsec_example-secret"));

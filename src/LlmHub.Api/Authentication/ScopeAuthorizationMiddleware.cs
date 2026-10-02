@@ -34,7 +34,10 @@ public sealed class ScopeAuthorizationMiddleware(RequestDelegate next)
             return "hub.cancel";
         }
 
-        if (request.Path.StartsWithSegments("/v1/workers"))
+        if (request.Path.StartsWithSegments("/v1/workers")
+            || request.Path.Value?.EndsWith("/heartbeat", StringComparison.Ordinal) == true
+            || request.Path.Value?.EndsWith("/complete", StringComparison.Ordinal) == true
+            || request.Path.Value?.EndsWith("/fail", StringComparison.Ordinal) == true)
         {
             return "hub.admin";
         }

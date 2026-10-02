@@ -77,9 +77,9 @@ dotnet build LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | Contrato, Redis Streams e publisher configurável concluídos |
-| Testes | Aprovados com fila fake e Redis Streams real para publicação no stream do adapter; consumer groups e recuperação de pendências pendentes |
+| Implementação | Contrato, Redis Streams, publisher configurável, consumer groups, leitura de pendências e acknowledge concluídos |
+| Testes | Aprovados com fila fake e Redis Streams real para publicação, consumer group, pendência e acknowledge |
 | Documentação | Concluída |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 85%. Ainda faltam consumer groups, acknowledgements e recuperação de mensagens pendentes.
+**Progresso geral:** 95%. Falta integrar o consumidor de Streams a um worker de produção, sem retirar o fencing do Hub.

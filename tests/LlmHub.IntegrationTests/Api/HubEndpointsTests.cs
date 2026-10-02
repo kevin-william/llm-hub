@@ -5,6 +5,9 @@ using LlmHub.Contracts.Channels;
 using LlmHub.Contracts.Events;
 using LlmHub.Contracts.Messages;
 using LlmHub.Contracts.Runs;
+using LlmHub.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LlmHub.IntegrationTests.Api;
 
@@ -45,6 +48,28 @@ public sealed class HubEndpointsTests(HubApiFactory factory) : IClassFixture<Hub
         var cancelled = await cancelResponse.Content.ReadFromJsonAsync<RunResponse>();
         Assert.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
         Assert.Equal("cancelled", cancelled?.State);
+    }
+
+    [Fact]
+    public async Task SendUsesTheDestinationPersistedWithTheChannel()
+    {
+        using var client = factory.CreateClient();
+        var openResponse = await client.PostAsJsonAsync("/v1/channels", new OpenChannelRequest("agent:echo/default"));
+        var channel = await openResponse.Content.ReadFromJsonAsync<ChannelResponse>();
+        Assert.NotNull(channel);
+
+        var sendResponse = await client.PostAsJsonAsync(
+            $"/v1/channels/{channel!.ChannelId}/messages",
+            new SendMessageRequest("client_echo", "Use the echo adapter.", false));
+        var accepted = await sendResponse.Content.ReadFromJsonAsync<AcceptMessageResult>();
+        Assert.Equal(HttpStatusCode.Accepted, sendResponse.StatusCode);
+        Assert.NotNull(accepted);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<HubDbContext>>();
+        await using var context = await contextFactory.CreateDbContextAsync(CancellationToken.None);
+        Assert.Equal("agent:echo/default", (await context.Messages.SingleAsync(item => item.Id == accepted!.MessageId)).Recipient);
+        Assert.Equal("echo", (await context.Runs.SingleAsync(item => item.Id == accepted.RunId)).Adapter);
     }
 
     [Fact]
@@ -103,6 +128,51 @@ public sealed class HubEndpointsTests(HubApiFactory factory) : IClassFixture<Hub
         var response = await outsider.GetAsync($"/v1/channels/{channel.ChannelId}/messages");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChannelParticipantCanReadStoredArtifact()
+    {
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Principal-Id", "principal:artifact-owner");
+        var channel = await CreateChannelAsync(client);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<HubDbContext>>();
+            await using var context = await contextFactory.CreateDbContextAsync(CancellationToken.None);
+            context.Artifacts.Add(new ArtifactRecord
+            {
+                Id = "art_api", RunId = "run_api", ChannelId = channel.ChannelId,
+                ContentHash = new string('c', 64), StorageKey = $"sha256/{new string('c', 64)}",
+                ContentType = "text/plain", Length = 3,
+            });
+            await context.SaveChangesAsync(CancellationToken.None);
+        }
+
+        var response = await client.GetAsync("/v1/artifacts/art_api");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal($"artifact:sha256/{new string('c', 64)}", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task WorkerCanUploadAnArtifactBeforeCompletingItsRun()
+    {
+        using var client = factory.CreateClient();
+        var content = System.Text.Encoding.UTF8.GetBytes("worker artifact");
+        var expectedHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content)).ToLowerInvariant();
+        using var body = new ByteArrayContent(content);
+        body.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        body.Headers.Add("X-Artifact-Sha256", expectedHash);
+
+        var response = await client.PostAsync("/v1/workers/worker_1/artifacts", body);
+        var artifact = await response.Content.ReadFromJsonAsync<LlmHub.Contracts.Artifacts.ArtifactUploadResponse>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(artifact);
+        Assert.Equal(expectedHash, artifact!.ContentHash);
+        Assert.Equal($"sha256/{expectedHash}", artifact.StorageKey);
+        Assert.Contains(factory.ArtifactStore.UploadedArtifacts, item => item.ContentHash == expectedHash);
     }
 
     private static async Task<ChannelResponse> CreateChannelAsync(HttpClient client)

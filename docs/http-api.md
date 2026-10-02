@@ -8,6 +8,7 @@ Os endpoints HTTP ficam sob `/v1` e são equivalentes às ferramentas MCP. Duran
 | GET | `/v1/channels/{channelId}` | Lê canal e participantes. |
 | GET | `/v1/channels/{channelId}/messages?afterSequence=&limit=` | Lista histórico por cursor de sequência. |
 | POST | `/v1/channels/{channelId}/messages` | Aceita mensagem, cria run e outbox. |
+| POST | `/v1/workers/{workerId}/artifacts` | Armazena bytes do worker e devolve referência por checksum. |
 | GET | `/v1/messages/{messageId}` | Lê conteúdo e correlação da mensagem. |
 | GET | `/v1/runs/{runId}` | Lê estado do run. |
 | POST | `/v1/runs/{runId}/cancel` | Solicita cancelamento cooperativo. |

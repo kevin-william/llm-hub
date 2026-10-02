@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using LlmHub.Contracts.Artifacts;
 using LlmHub.Contracts.Workers;
 using LlmHub.Domain.Common;
 using LlmHub.Domain.Runs;
+using LlmHub.Infrastructure.Observability;
 using LlmHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +27,13 @@ public sealed class WorkerGatewayTests
         Assert.False(heartbeat.CancelRequested);
         Assert.True(heartbeat.LeaseExpiresAt > DateTimeOffset.UtcNow);
         Assert.Equal(RunState.Succeeded, (await context.Runs.SingleAsync(CancellationToken.None)).State);
+        var endpoint = await context.Endpoints.SingleAsync(CancellationToken.None);
+        Assert.Equal("agent:opencode/worker_1", endpoint.Address);
+        Assert.Equal("online", endpoint.Status);
+        var attempt = await context.RunAttempts.SingleAsync(CancellationToken.None);
+        Assert.Equal("run_1", attempt.RunId);
+        Assert.Equal(1, attempt.Number);
+        Assert.Equal(claim.LeaseToken, attempt.LeaseToken);
     }
 
     [Fact]
@@ -50,6 +59,12 @@ public sealed class WorkerGatewayTests
 
         await Assert.ThrowsAsync<DomainException>(() => gateway.CompleteAsync(first!.RunId, new CompleteRunRequest(first.LeaseToken), CancellationToken.None));
         await gateway.CompleteAsync(second!.RunId, new CompleteRunRequest(second.LeaseToken), CancellationToken.None);
+        await using var verify = await factory.CreateDbContextAsync(CancellationToken.None);
+        var attempts = await verify.RunAttempts.OrderBy(attempt => attempt.Number).ToArrayAsync(CancellationToken.None);
+        Assert.Collection(
+            attempts,
+            attempt => Assert.Equal(1, attempt.Number),
+            attempt => Assert.Equal(2, attempt.Number));
     }
 
     [Fact]
@@ -123,6 +138,35 @@ public sealed class WorkerGatewayTests
         await using var finalContext = await factory.CreateDbContextAsync(CancellationToken.None);
 
         Assert.Equal(RunState.DeadLetter, (await finalContext.Runs.SingleAsync(CancellationToken.None)).State);
+    }
+
+    [Fact]
+    public async Task ClaimTraceContainsThePersistedAttemptIdentifier()
+    {
+        var factory = CreateFactory();
+        await SeedRunAsync(factory, "run_1");
+        var gateway = new PostgresWorkerGateway(factory);
+        await gateway.RegisterAsync(new RegisterWorkerRequest("worker_1", "opencode", [], "1.0.0", 1), CancellationToken.None);
+        Activity? claimActivity = null;
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "LlmHub",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == "run.claim")
+                {
+                    claimActivity = activity;
+                }
+            },
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        await gateway.ClaimAsync("worker_1", CancellationToken.None);
+
+        Assert.NotNull(claimActivity);
+        Assert.Equal("run_1", claimActivity!.GetTagItem("run_id"));
+        Assert.StartsWith("att_", Assert.IsType<string>(claimActivity.GetTagItem("attempt_id")));
     }
 
     private static TestDbContextFactory CreateFactory()

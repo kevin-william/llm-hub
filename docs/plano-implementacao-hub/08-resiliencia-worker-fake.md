@@ -1,7 +1,7 @@
 # 08 — Recuperação, retry e worker fake
 
-> **Status:** Concluída com validação de infraestrutura pendente  
-> **Progresso:** 90%  
+> **Status:** Em andamento — validação de interrupção de processo pendente  
+> **Progresso:** 95%  
 > **Dependências:** 07  
 > **Commit único:** `feat(workers): recuperar leases e tratar retries`
 
@@ -77,8 +77,8 @@ dotnet test tests/LlmHub.IntegrationTests --filter FullyQualifiedName~Workers
 | Item | Status |
 |---|---|
 | Implementação | Reaper, retry, dead letter e executor fake implementados |
-| Testes | Recuperação de lease aprovada em banco efêmero; reinício Redis/PostgreSQL pendente |
+| Testes | Recuperação ponta a ponta de um worker interrompido coberta com worker fake; Redis e PostgreSQL locais reiniciados com sucesso e cenários de Streams, persistência e claim executados após a recuperação |
 | Documentação | Concluída |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 90%
+**Progresso geral:** 100% para o ambiente controlado. A validação em processo/ambiente de produção continua operacionalmente pendente.

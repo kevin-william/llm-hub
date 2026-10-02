@@ -41,7 +41,7 @@ public sealed class RedisRunQueue(IConnectionMultiplexer connection) : IRunQueue
             .StreamReadGroupAsync(StreamName(adapter), groupName, consumerName, position, count: Math.Clamp(count, 1, 100))
             .WaitAsync(cancellationToken);
         return entries.Select(entry => new QueuedRunDelivery(
-            entry.Id,
+            entry.Id!,
             new QueuedRun(
                 Value(entry, "event_id"),
                 Value(entry, "run_id"),

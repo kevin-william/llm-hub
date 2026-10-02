@@ -4,7 +4,7 @@ namespace LlmHub.Application.Workers;
 
 public interface IWorkerGateway
 {
-    Task RegisterAsync(RegisterWorkerRequest request, CancellationToken cancellationToken);
+    Task RegisterAsync(RegisterWorkerRequest request, CancellationToken cancellationToken, string tenantId = "tenant:development");
 
     Task<ClaimedRunResponse?> ClaimAsync(string workerId, CancellationToken cancellationToken);
 

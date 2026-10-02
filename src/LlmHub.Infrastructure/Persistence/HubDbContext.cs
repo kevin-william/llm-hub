@@ -38,6 +38,8 @@ public sealed class HubDbContext(DbContextOptions<HubDbContext> options) : DbCon
             entity.ToTable("channels");
             entity.HasKey(channel => channel.Id);
             entity.Property(channel => channel.Id).HasMaxLength(80);
+            entity.Property(channel => channel.Destination).HasMaxLength(256);
+            entity.Property(channel => channel.TenantId).HasMaxLength(160);
             entity.Property(channel => channel.Ordering).HasMaxLength(16);
             entity.Property(channel => channel.Version).IsConcurrencyToken();
         });
@@ -55,6 +57,7 @@ public sealed class HubDbContext(DbContextOptions<HubDbContext> options) : DbCon
             entity.ToTable("endpoints");
             entity.HasKey(endpoint => endpoint.Id);
             entity.HasIndex(endpoint => endpoint.Address).IsUnique();
+            entity.Property(endpoint => endpoint.TenantId).HasMaxLength(160);
             entity.Property(endpoint => endpoint.CapabilitiesJson).HasColumnType("jsonb");
         });
 
@@ -124,6 +127,7 @@ public sealed class HubDbContext(DbContextOptions<HubDbContext> options) : DbCon
         {
             entity.ToTable("workers");
             entity.HasKey(worker => worker.Id);
+            entity.Property(worker => worker.TenantId).HasMaxLength(160);
             entity.Property(worker => worker.CapabilitiesJson).HasColumnType("jsonb");
         });
 
@@ -140,6 +144,10 @@ public sealed class HubDbContext(DbContextOptions<HubDbContext> options) : DbCon
 public sealed class ChannelRecord
 {
     public string Id { get; set; } = null!;
+
+    public string TenantId { get; set; } = "tenant:development";
+
+    public string Destination { get; set; } = "agent:opencode/default";
 
     public string Ordering { get; set; } = "serial";
 
@@ -162,6 +170,8 @@ public sealed class ChannelParticipantRecord
 public sealed class EndpointRecord
 {
     public string Id { get; set; } = null!;
+
+    public string TenantId { get; set; } = "tenant:development";
 
     public string Address { get; set; } = null!;
 
@@ -341,6 +351,8 @@ public sealed class ArtifactRecord
 public sealed class WorkerRecord
 {
     public string Id { get; set; } = null!;
+
+    public string TenantId { get; set; } = "tenant:development";
 
     public string Adapter { get; set; } = null!;
 

@@ -1,4 +1,5 @@
 using LlmHub.Application.Events;
+using LlmHub.Api.Authentication;
 using LlmHub.Contracts.Events;
 using LlmHub.Domain.Common;
 using LlmHub.Infrastructure.Webhooks;
@@ -17,8 +18,7 @@ public static class SubscriptionEndpointMappings
     {
         try
         {
-            var principal = httpRequest.Headers.TryGetValue("X-Principal-Id", out var header) ? header.ToString() : "principal:development";
-            return Results.Created($"/v1/subscriptions", await service.CreateAsync(principal, request, cancellationToken));
+            return Results.Created($"/v1/subscriptions", await service.CreateAsync(RequestIdentity.Principal(httpRequest.HttpContext), RequestIdentity.Tenant(httpRequest.HttpContext), request, cancellationToken));
         }
         catch (DomainException exception)
         {
@@ -32,8 +32,7 @@ public static class SubscriptionEndpointMappings
 
     private static async Task<IResult> RemoveAsync(string subscriptionId, HttpRequest httpRequest, ISubscriptionService service, CancellationToken cancellationToken)
     {
-        var principal = httpRequest.Headers.TryGetValue("X-Principal-Id", out var header) ? header.ToString() : "principal:development";
-        await service.RemoveAsync(principal, subscriptionId, cancellationToken);
+        await service.RemoveAsync(RequestIdentity.Principal(httpRequest.HttpContext), RequestIdentity.Tenant(httpRequest.HttpContext), subscriptionId, cancellationToken);
         return Results.NoContent();
     }
 }

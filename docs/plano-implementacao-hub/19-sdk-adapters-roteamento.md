@@ -1,7 +1,7 @@
 # 19 — SDK de adapters e roteamento determinístico
 
 > **Status:** Em andamento  
-> **Progresso:** 60%  
+> **Progresso:** 90%  
 > **Dependências:** 18  
 > **Commit único:** `feat(adapters): generalizar workers e roteamento`
 
@@ -79,9 +79,9 @@ dotnet test LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | SDK `IAgentAdapter`, adapter Echo e roteamento determinístico por destino implementados |
-| Testes | Contrato do Echo e seleção de adapter no run cobertos |
+| Implementação | SDK `IAgentAdapter`, adapter Echo, registro de capacidades por endpoint e roteamento determinístico por destino ou capacidades implementados |
+| Testes | Contrato do Echo, seleção de adapter no run, publicação de endpoint por worker, exposição de capacidades por MCP e seleção/indisponibilidade por capacidades cobertos |
 | Documentação | Guia do SDK e regras de roteamento criados |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 60%. Faltam registro de capacidades por endpoint e a suíte de contrato compartilhada com uma integração OpenCode real.
+**Progresso geral:** 90%. Falta a suíte de contrato compartilhada com uma integração OpenCode real.

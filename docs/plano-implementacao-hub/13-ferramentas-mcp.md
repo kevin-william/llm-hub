@@ -1,7 +1,7 @@
 # 13 — Servidor e ferramentas MCP do Hub
 
-> **Status:** Em andamento — eventos persistentes e validação externa pendentes  
-> **Progresso:** 65%  
+> **Status:** Em andamento — validação externa pendente  
+> **Progresso:** 75%  
 > **Dependências:** 05, 12  
 > **Commit único:** `feat(mcp): expor ferramentas e eventos do hub`
 
@@ -78,9 +78,9 @@ dotnet build LlmHub.sln --configuration Release
 
 | Item | Status |
 |---|---|
-| Implementação | Endpoint `/mcp` e oito ferramentas concluídos; eventos persistentes pendentes |
-| Testes | Concluídos para `tools/list`, `open_channel` e `send_message` pelo transporte MCP |
+| Implementação | Endpoint `/mcp`, dez ferramentas e inscrições persistentes concluídos; a extensão experimental `events/*` segue isolada por não ser padrão do protocolo |
+| Testes | Concluídos para `tools/list`, `open_channel`, `send_message`, `subscribe_events` e `unsubscribe_events` pelo transporte MCP |
 | Documentação | Concluída em `docs/mcp-hub.md` |
 | Validação do usuário | Pendente |
 
-**Progresso geral:** 65%. Falta integrar a extensão experimental de eventos às inscrições persistentes e validar com host ChatGPT em HTTPS público.
+**Progresso geral:** 75%. Falta validar o endpoint com host ChatGPT em HTTPS público e decidir como retomar eventos conforme o protocolo suportado por esse host.

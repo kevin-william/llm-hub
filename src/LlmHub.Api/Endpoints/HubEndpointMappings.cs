@@ -1,4 +1,5 @@
 using LlmHub.Application.Channels;
+using LlmHub.Api.Authentication;
 using LlmHub.Application.Messaging;
 using LlmHub.Contracts.Channels;
 using LlmHub.Contracts.Messages;
@@ -6,6 +7,7 @@ using LlmHub.Contracts.Runs;
 using LlmHub.Domain.Common;
 using LlmHub.Domain.Runs;
 using LlmHub.Infrastructure.Persistence;
+using LlmHub.Infrastructure.Artifacts;
 using Microsoft.EntityFrameworkCore;
 
 namespace LlmHub.Api.Endpoints;
@@ -21,6 +23,7 @@ public static class HubEndpointMappings
         channels.MapPost("/{channelId}/messages", SendMessageAsync);
 
         app.MapGet("/v1/messages/{messageId}", GetMessageAsync);
+        app.MapGet("/v1/artifacts/{artifactId}", GetArtifactAsync);
         app.MapGet("/v1/runs/{runId}", GetRunAsync);
         app.MapPost("/v1/runs/{runId}/cancel", CancelRunAsync);
         app.MapPost("/v1/deliveries/{messageId}/ack", AckMessageAsync);
@@ -35,9 +38,9 @@ public static class HubEndpointMappings
         try
         {
             var result = await service.CreateAsync(
-                new CreateChannelCommand(Principal(httpRequest), request.Destination, request.Participants, request.MaxHops),
+                new CreateChannelCommand(RequestIdentity.Principal(httpRequest.HttpContext), request.Destination, request.Participants, request.MaxHops, request.RequiredCapabilities, RequestIdentity.Tenant(httpRequest.HttpContext)),
                 cancellationToken);
-            return Results.Created($"/v1/channels/{result.ChannelId}", new ChannelResponse(result.ChannelId, result.Participants, result.Ordering, result.MaxHops));
+            return Results.Created($"/v1/channels/{result.ChannelId}", new ChannelResponse(result.ChannelId, result.Destination, result.Participants, result.Ordering, result.MaxHops));
         }
         catch (DomainException exception)
         {
@@ -58,11 +61,11 @@ public static class HubEndpointMappings
             .Where(item => item.ChannelId == channelId)
             .Select(item => item.PrincipalId)
             .ToArrayAsync(cancellationToken);
-        if (!participants.Contains(Principal(request), StringComparer.Ordinal))
+        if (channel.TenantId != RequestIdentity.Tenant(request.HttpContext) || !participants.Contains(RequestIdentity.Principal(request.HttpContext), StringComparer.Ordinal))
         {
             return Results.NotFound();
         }
-        return Results.Ok(new ChannelResponse(channel.Id, participants, channel.Ordering, channel.MaxHops));
+        return Results.Ok(new ChannelResponse(channel.Id, channel.Destination, participants, channel.Ordering, channel.MaxHops));
     }
 
     private static async Task<IResult> GetHistoryAsync(
@@ -75,7 +78,7 @@ public static class HubEndpointMappings
     {
         var pageSize = Math.Clamp(limit ?? 50, 1, 100);
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        if (!await CanAccessChannelAsync(context, channelId, Principal(request), cancellationToken))
+        if (!await CanAccessChannelAsync(context, channelId, RequestIdentity.Principal(request.HttpContext), RequestIdentity.Tenant(request.HttpContext), cancellationToken))
         {
             return Results.NotFound();
         }
@@ -103,9 +106,9 @@ public static class HubEndpointMappings
 
         try
         {
-            var principal = Principal(httpRequest);
+            var principal = RequestIdentity.Principal(httpRequest.HttpContext);
             var result = await service.AcceptAsync(
-                new AcceptMessageCommand(channelId, principal, principal, "agent:opencode/default", request.ClientMessageId, request.Content, request.AwaitResponse, request.Attachments),
+                new AcceptMessageCommand(channelId, principal, principal, "agent:opencode/default", request.ClientMessageId, request.Content, request.AwaitResponse, request.Attachments, RequestIdentity.Tenant(httpRequest.HttpContext)),
                 cancellationToken);
             return Results.Accepted($"/v1/runs/{result.RunId}", result);
         }
@@ -123,16 +126,40 @@ public static class HubEndpointMappings
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var message = await context.Messages.AsNoTracking().SingleOrDefaultAsync(item => item.Id == messageId, cancellationToken);
-        return message is null || !await CanAccessChannelAsync(context, message.ChannelId, Principal(request), cancellationToken)
+        return message is null || !await CanAccessChannelAsync(context, message.ChannelId, RequestIdentity.Principal(request.HttpContext), RequestIdentity.Tenant(request.HttpContext), cancellationToken)
             ? Results.NotFound()
             : Results.Ok(ToContract(message));
+    }
+
+    private static async Task<IResult> GetArtifactAsync(
+        string artifactId,
+        HttpRequest request,
+        IDbContextFactory<HubDbContext> contextFactory,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var artifact = await context.Artifacts.AsNoTracking().SingleOrDefaultAsync(item => item.Id == artifactId, cancellationToken);
+        if (artifact is null || !await CanAccessChannelAsync(context, artifact.ChannelId, RequestIdentity.Principal(request.HttpContext), RequestIdentity.Tenant(request.HttpContext), cancellationToken))
+        {
+            return Results.NotFound();
+        }
+
+        var store = services.GetService<IArtifactStore>();
+        if (store is null)
+        {
+            return Results.Problem("Artifact storage is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var content = await store.GetAsync(artifact.StorageKey, cancellationToken);
+        return Results.File(content, artifact.ContentType);
     }
 
     private static async Task<IResult> GetRunAsync(string runId, HttpRequest request, IDbContextFactory<HubDbContext> contextFactory, CancellationToken cancellationToken)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var run = await context.Runs.AsNoTracking().SingleOrDefaultAsync(item => item.Id == runId, cancellationToken);
-        return run is null || !await CanAccessChannelAsync(context, run.ChannelId, Principal(request), cancellationToken)
+        return run is null || !await CanAccessChannelAsync(context, run.ChannelId, RequestIdentity.Principal(request.HttpContext), RequestIdentity.Tenant(request.HttpContext), cancellationToken)
             ? Results.NotFound()
             : Results.Ok(new RunResponse(run.Id, run.ChannelId, run.InputMessageId, run.State.ToString().ToLowerInvariant(), run.AcceptedAt));
     }
@@ -145,7 +172,7 @@ public static class HubEndpointMappings
         {
             return Results.NotFound();
         }
-        if (!await CanAccessChannelAsync(context, run.ChannelId, Principal(request), cancellationToken))
+        if (!await CanAccessChannelAsync(context, run.ChannelId, RequestIdentity.Principal(request.HttpContext), RequestIdentity.Tenant(request.HttpContext), cancellationToken))
         {
             return Results.NotFound();
         }
@@ -175,16 +202,10 @@ public static class HubEndpointMappings
         message.HopCount,
         message.CreatedAt);
 
-    private static string Principal(HttpRequest request)
-        => request.HttpContext.User.FindFirst("sub")?.Value is { Length: > 0 } subject
-            ? $"principal:oidc/{subject}"
-            : request.Headers.TryGetValue("X-Principal-Id", out var value) && !string.IsNullOrWhiteSpace(value)
-            ? value.ToString()
-            : "principal:development";
-
-    private static Task<bool> CanAccessChannelAsync(HubDbContext context, string channelId, string principal, CancellationToken cancellationToken)
+    private static Task<bool> CanAccessChannelAsync(HubDbContext context, string channelId, string principal, string tenant, CancellationToken cancellationToken)
         => context.ChannelParticipants.AnyAsync(
-            participant => participant.ChannelId == channelId && participant.PrincipalId == principal,
+            participant => participant.ChannelId == channelId && participant.PrincipalId == principal
+                && context.Channels.Any(channel => channel.Id == channelId && channel.TenantId == tenant),
             cancellationToken);
 
     private static IResult Problem(string detail, int statusCode)

@@ -5,6 +5,7 @@ using LlmHub.Domain.Runs;
 using LlmHub.Infrastructure.Observability;
 using LlmHub.Application.Routing;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace LlmHub.Infrastructure.Persistence;
 
@@ -24,11 +25,13 @@ public sealed class PostgresMessageAcceptanceService : IMessageAcceptanceService
         using var activity = HubTelemetry.Start("message.accept", command.ChannelId);
         if (System.Text.Encoding.UTF8.GetByteCount(command.Content) > quotas.MaxMessageBytes)
         {
+            await RecordQuotaRejectionAsync(command.ChannelId, "quota.message.rejected", cancellationToken);
             throw new DomainException("MESSAGE_QUOTA_EXCEEDED");
         }
 
         if ((command.Attachments?.Count ?? 0) > quotas.MaxAttachments)
         {
+            await RecordQuotaRejectionAsync(command.ChannelId, "quota.attachments.rejected", cancellationToken);
             throw new DomainException("ATTACHMENT_QUOTA_EXCEEDED");
         }
 
@@ -37,23 +40,18 @@ public sealed class PostgresMessageAcceptanceService : IMessageAcceptanceService
             ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
 
-        var replay = await context.Messages
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                message => message.PrincipalId == command.PrincipalId && message.ClientMessageId == command.ClientMessageId,
-                cancellationToken);
-
+        var replay = await FindReplayAsync(context, command, cancellationToken);
         if (replay is not null)
         {
-            var existingRun = await context.Runs
-                .AsNoTracking()
-                .SingleAsync(run => run.InputMessageId == replay.Id, cancellationToken);
-
-            return new AcceptMessageResult(replay.Id, existingRun.Id, replay.Sequence, true);
+            return replay;
         }
 
         var channel = await context.Channels.SingleOrDefaultAsync(channel => channel.Id == command.ChannelId, cancellationToken)
             ?? throw new DomainException("The channel does not exist.");
+        if (channel.TenantId != command.TenantId)
+        {
+            throw new DomainException("CHANNEL_ACCESS_DENIED");
+        }
         var isParticipant = await context.ChannelParticipants.AnyAsync(
             participant => participant.ChannelId == channel.Id && participant.PrincipalId == command.PrincipalId,
             cancellationToken);
@@ -85,6 +83,7 @@ public sealed class PostgresMessageAcceptanceService : IMessageAcceptanceService
                                 select queuedRun.Id).CountAsync(cancellationToken);
         if (activeRuns >= quotas.MaxActiveRunsPerPrincipal)
         {
+            await RecordQuotaRejectionAsync(command.ChannelId, "quota.runs.rejected", cancellationToken);
             throw new DomainException("RUN_QUOTA_EXCEEDED");
         }
 
@@ -102,7 +101,8 @@ public sealed class PostgresMessageAcceptanceService : IMessageAcceptanceService
         }
 
         var now = DateTimeOffset.UtcNow;
-        var adapter = DeterministicAdapterRouter.Resolve(command.Recipient);
+        var destination = channel.Destination;
+        var adapter = DeterministicAdapterRouter.Resolve(destination);
         var messageId = $"msg_{Guid.NewGuid():N}";
         var runId = $"run_{Guid.NewGuid():N}";
         var eventId = $"evt_{Guid.NewGuid():N}";
@@ -117,7 +117,7 @@ public sealed class PostgresMessageAcceptanceService : IMessageAcceptanceService
             PrincipalId = command.PrincipalId,
             ClientMessageId = command.ClientMessageId,
             Sender = command.Sender,
-            Recipient = command.Recipient,
+            Recipient = destination,
             Content = command.Content,
             RootMessageId = messageId,
             HopCount = 0,
@@ -150,15 +150,80 @@ public sealed class PostgresMessageAcceptanceService : IMessageAcceptanceService
             Id = $"aud_{Guid.NewGuid():N}", EventName = "route.selected", ChannelId = command.ChannelId,
             MessageId = messageId, RunId = runId, EventId = eventId, OccurredAt = now,
         });
-        await context.SaveChangesAsync(cancellationToken);
-
-        if (transaction is not null)
+        try
         {
-            await transaction.CommitAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+        }
+        catch (DbUpdateConcurrencyException) when (string.Equals(channel.Ordering, "serial", StringComparison.OrdinalIgnoreCase))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+            }
+
+            throw new DomainException("A serial channel already has an active run.");
+        }
+        catch (DbUpdateException exception)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+            }
+
+            await using var lookupContext = await contextFactory.CreateDbContextAsync(cancellationToken);
+            var concurrentReplay = await FindReplayAsync(lookupContext, command, cancellationToken);
+            if (concurrentReplay is not null)
+            {
+                return concurrentReplay;
+            }
+
+            if (string.Equals(channel.Ordering, "serial", StringComparison.OrdinalIgnoreCase)
+                && exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            {
+                throw new DomainException("A serial channel already has an active run.");
+            }
+
+            throw;
         }
 
         HubTelemetry.MessagesAccepted.Add(1);
 
         return new AcceptMessageResult(messageId, runId, message.Sequence, false);
+    }
+
+    private static async Task<AcceptMessageResult?> FindReplayAsync(
+        HubDbContext context,
+        AcceptMessageCommand command,
+        CancellationToken cancellationToken)
+    {
+        var message = await context.Messages
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.PrincipalId == command.PrincipalId && item.ClientMessageId == command.ClientMessageId,
+                cancellationToken);
+        if (message is null)
+        {
+            return null;
+        }
+
+        var run = await context.Runs
+            .AsNoTracking()
+            .SingleAsync(item => item.InputMessageId == message.Id, cancellationToken);
+        return new AcceptMessageResult(message.Id, run.Id, message.Sequence, true);
+    }
+
+    private async Task RecordQuotaRejectionAsync(string channelId, string eventName, CancellationToken cancellationToken)
+    {
+        await using var auditContext = await contextFactory.CreateDbContextAsync(cancellationToken);
+        auditContext.AuditEvents.Add(new AuditRecord
+        {
+            Id = $"aud_{Guid.NewGuid():N}", EventName = eventName, ChannelId = channelId, OccurredAt = DateTimeOffset.UtcNow,
+        });
+        await auditContext.SaveChangesAsync(cancellationToken);
     }
 }

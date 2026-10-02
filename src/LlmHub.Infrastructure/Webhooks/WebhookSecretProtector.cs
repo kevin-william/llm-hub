@@ -24,23 +24,20 @@ public sealed class AesGcmWebhookSecretProtector : IWebhookSecretProtector
 {
     private const int NonceSize = 12;
     private const int TagSize = 16;
-    private readonly byte[] key;
+    private readonly KeyMaterial primaryKey;
+    private readonly IReadOnlyDictionary<string, KeyMaterial> keys;
 
-    public AesGcmWebhookSecretProtector(string base64Key)
+    public AesGcmWebhookSecretProtector(string base64Key) : this(base64Key, [])
     {
-        try
-        {
-            key = Convert.FromBase64String(base64Key);
-        }
-        catch (FormatException exception)
-        {
-            throw new WebhookSecretProtectionException("Webhook:SecretEncryptionKey must be a base64-encoded 256-bit key.", exception);
-        }
+    }
 
-        if (key.Length != 32)
-        {
-            throw new WebhookSecretProtectionException("Webhook:SecretEncryptionKey must be a base64-encoded 256-bit key.");
-        }
+    public AesGcmWebhookSecretProtector(string base64Key, IReadOnlyList<string> previousBase64Keys)
+    {
+        primaryKey = ParseKey(base64Key);
+        keys = new[] { primaryKey }
+            .Concat((previousBase64Keys ?? []).Where(key => !string.IsNullOrWhiteSpace(key)).Select(ParseKey))
+            .GroupBy(key => key.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
     }
 
     public string Protect(string secret)
@@ -50,24 +47,51 @@ public sealed class AesGcmWebhookSecretProtector : IWebhookSecretProtector
         var plaintext = System.Text.Encoding.UTF8.GetBytes(secret);
         var ciphertext = new byte[plaintext.Length];
         var tag = new byte[TagSize];
-        using var cipher = new AesGcm(key, TagSize);
+        using var cipher = new AesGcm(primaryKey.Value, TagSize);
         cipher.Encrypt(nonce, plaintext, ciphertext, tag);
-        return $"v1:{Convert.ToBase64String(nonce)}:{Convert.ToBase64String(tag)}:{Convert.ToBase64String(ciphertext)}";
+        return $"v2:{primaryKey.Id}:{Convert.ToBase64String(nonce)}:{Convert.ToBase64String(tag)}:{Convert.ToBase64String(ciphertext)}";
     }
 
     public string Unprotect(string protectedSecret)
     {
         var parts = protectedSecret.Split(':', StringSplitOptions.None);
-        if (parts.Length != 4 || parts[0] != "v1")
+        if (parts is ["v2", var keyId, var nonceValue, var tagValue, var ciphertextValue])
         {
-            throw new WebhookSecretProtectionException("The stored webhook secret has an unsupported format.");
+            if (!keys.TryGetValue(keyId, out var key))
+            {
+                throw new WebhookSecretProtectionException("The stored webhook secret uses an unavailable encryption key.");
+            }
+
+            return Decrypt(key.Value, nonceValue, tagValue, ciphertextValue);
         }
 
+        if (parts is ["v1", var legacyNonce, var legacyTag, var legacyCiphertext])
+        {
+            foreach (var key in keys.Values)
+            {
+                try
+                {
+                    return Decrypt(key.Value, legacyNonce, legacyTag, legacyCiphertext);
+                }
+                catch (WebhookSecretProtectionException)
+                {
+                    // Try the next configured previous key for secrets written before key identifiers existed.
+                }
+            }
+
+            throw new WebhookSecretProtectionException("The stored webhook secret cannot be decrypted.");
+        }
+
+        throw new WebhookSecretProtectionException("The stored webhook secret has an unsupported format.");
+    }
+
+    private static string Decrypt(byte[] key, string nonceValue, string tagValue, string ciphertextValue)
+    {
         try
         {
-            var nonce = Convert.FromBase64String(parts[1]);
-            var tag = Convert.FromBase64String(parts[2]);
-            var ciphertext = Convert.FromBase64String(parts[3]);
+            var nonce = Convert.FromBase64String(nonceValue);
+            var tag = Convert.FromBase64String(tagValue);
+            var ciphertext = Convert.FromBase64String(ciphertextValue);
             if (nonce.Length != NonceSize || tag.Length != TagSize)
             {
                 throw new WebhookSecretProtectionException("The stored webhook secret is invalid.");
@@ -87,6 +111,28 @@ public sealed class AesGcmWebhookSecretProtector : IWebhookSecretProtector
             throw new WebhookSecretProtectionException("The stored webhook secret cannot be decrypted.", exception);
         }
     }
+
+    private static KeyMaterial ParseKey(string base64Key)
+    {
+        byte[] key;
+        try
+        {
+            key = Convert.FromBase64String(base64Key);
+        }
+        catch (FormatException exception)
+        {
+            throw new WebhookSecretProtectionException("Webhook:SecretEncryptionKey must be a base64-encoded 256-bit key.", exception);
+        }
+
+        if (key.Length != 32)
+        {
+            throw new WebhookSecretProtectionException("Webhook:SecretEncryptionKey must be a base64-encoded 256-bit key.");
+        }
+
+        return new KeyMaterial(Convert.ToHexString(SHA256.HashData(key))[..16].ToLowerInvariant(), key);
+    }
+
+    private sealed record KeyMaterial(string Id, byte[] Value);
 }
 
 public sealed class UnavailableWebhookSecretProtector : IWebhookSecretProtector

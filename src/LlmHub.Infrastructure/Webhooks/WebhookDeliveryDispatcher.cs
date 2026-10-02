@@ -126,6 +126,7 @@ public sealed class WebhookDeliveryDispatcher(
         {
             using var activity = HubTelemetry.Start("webhook.deliver", eventId: delivery.EventId, deliveryId: delivery.Id);
             delivery.State = "sending";
+            await context.SaveChangesAsync(cancellationToken);
             try
             {
                 var subscription = await context.Subscriptions.SingleAsync(item => item.Id == delivery.SubscriptionId, cancellationToken);

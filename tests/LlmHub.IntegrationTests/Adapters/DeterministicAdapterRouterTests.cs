@@ -13,13 +13,13 @@ public sealed class DeterministicAdapterRouterTests
         var factory = new TestDbContextFactory(options);
         await using (var seed = await factory.CreateDbContextAsync(CancellationToken.None))
         {
-            seed.Channels.Add(new ChannelRecord { Id = "chn_echo", CreatedAt = DateTimeOffset.UtcNow });
+            seed.Channels.Add(new ChannelRecord { Id = "chn_echo", Destination = "agent:echo/default", CreatedAt = DateTimeOffset.UtcNow });
             seed.ChannelParticipants.Add(new ChannelParticipantRecord { ChannelId = "chn_echo", PrincipalId = "principal:router" });
             await seed.SaveChangesAsync(CancellationToken.None);
         }
 
         var accepted = await new PostgresMessageAcceptanceService(factory).AcceptAsync(
-            new AcceptMessageCommand("chn_echo", "principal:router", "principal:router", "agent:echo/default", "echo-client", "hello", false),
+            new AcceptMessageCommand("chn_echo", "principal:router", "principal:router", "agent:opencode/default", "echo-client", "hello", false),
             CancellationToken.None);
         await using var verify = await factory.CreateDbContextAsync(CancellationToken.None);
 

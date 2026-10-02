@@ -6,6 +6,7 @@ using LlmHub.Domain.Common;
 using LlmHub.Domain.Runs;
 using LlmHub.Infrastructure.Observability;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace LlmHub.Infrastructure.Persistence;
 
@@ -13,7 +14,7 @@ public sealed class PostgresWorkerGateway(IDbContextFactory<HubDbContext> contex
 {
     private static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(60);
 
-    public async Task RegisterAsync(RegisterWorkerRequest request, CancellationToken cancellationToken)
+    public async Task RegisterAsync(RegisterWorkerRequest request, CancellationToken cancellationToken, string tenantId = "tenant:development")
     {
         if (string.IsNullOrWhiteSpace(request.WorkerId) || string.IsNullOrWhiteSpace(request.Adapter) || request.MaxConcurrency < 1)
         {
@@ -29,9 +30,22 @@ public sealed class PostgresWorkerGateway(IDbContextFactory<HubDbContext> contex
         }
 
         worker.Adapter = request.Adapter;
+        worker.TenantId = tenantId;
         worker.CapabilitiesJson = JsonSerializer.Serialize(request.Capabilities);
         worker.Version = request.Version;
         worker.MaxConcurrency = request.MaxConcurrency;
+        var endpoint = await context.Endpoints.SingleOrDefaultAsync(endpoint => endpoint.Id == request.WorkerId, cancellationToken);
+        if (endpoint is null)
+        {
+            endpoint = new EndpointRecord { Id = request.WorkerId };
+            context.Endpoints.Add(endpoint);
+        }
+
+        endpoint.Address = $"agent:{request.Adapter}/{request.WorkerId}";
+        endpoint.TenantId = tenantId;
+        endpoint.Adapter = request.Adapter;
+        endpoint.CapabilitiesJson = worker.CapabilitiesJson;
+        endpoint.Status = "online";
         await context.SaveChangesAsync(cancellationToken);
     }
 
@@ -47,8 +61,11 @@ public sealed class PostgresWorkerGateway(IDbContextFactory<HubDbContext> contex
             return null;
         }
 
-        var run = await context.Runs.OrderBy(item => item.AcceptedAt)
-            .FirstOrDefaultAsync(item => item.State == RunState.Queued && item.Adapter == worker.Adapter, cancellationToken);
+        var run = await (from queuedRun in context.Runs
+                         join channel in context.Channels on queuedRun.ChannelId equals channel.Id
+                         where queuedRun.State == RunState.Queued && queuedRun.Adapter == worker.Adapter && channel.TenantId == worker.TenantId
+                         orderby queuedRun.AcceptedAt
+                         select queuedRun).FirstOrDefaultAsync(cancellationToken);
         if (run is null)
         {
             return null;
@@ -60,12 +77,37 @@ public sealed class PostgresWorkerGateway(IDbContextFactory<HubDbContext> contex
         run.LeaseToken = Guid.NewGuid().ToString("N");
         run.LeaseExpiresAt = now.Add(LeaseDuration);
         run.Version = Guid.NewGuid();
+        var attemptId = $"att_{Guid.NewGuid():N}";
+        var attemptNumber = (await context.RunAttempts
+            .Where(attempt => attempt.RunId == run.Id)
+            .Select(attempt => (int?)attempt.Number)
+            .MaxAsync(cancellationToken) ?? 0) + 1;
+        context.RunAttempts.Add(new RunAttemptRecord
+        {
+            Id = attemptId,
+            RunId = run.Id,
+            Number = attemptNumber,
+            LeaseToken = run.LeaseToken,
+            LeaseExpiresAt = run.LeaseExpiresAt,
+        });
         context.AuditEvents.Add(new AuditRecord
         {
             Id = $"aud_{Guid.NewGuid():N}", EventName = "run.claimed", ChannelId = run.ChannelId,
             RunId = run.Id, OccurredAt = now,
         });
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return null;
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            return null;
+        }
+        using var activity = HubTelemetry.Start("run.claim", run.ChannelId, runId: run.Id, attemptId: attemptId);
         var input = await context.Messages.SingleAsync(item => item.Id == run.InputMessageId, cancellationToken);
         var session = await context.AgentSessions.AsNoTracking().SingleOrDefaultAsync(
             item => item.ChannelId == run.ChannelId && item.Adapter == run.Adapter,
