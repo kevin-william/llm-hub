@@ -47,7 +47,20 @@ public sealed class TenantIsolationTests
         var gateway = new PostgresWorkerGateway(factory);
         await gateway.RegisterAsync(new RegisterWorkerRequest("worker_tenant_one", "echo", [], "test", 1), CancellationToken.None, "tenant:one");
 
-        Assert.Null(await gateway.ClaimAsync("worker_tenant_one", CancellationToken.None));
+        Assert.Null(await gateway.ClaimAsync("worker_tenant_one", CancellationToken.None, "tenant:one"));
+    }
+
+    [Fact]
+    public async Task TenantCannotTakeOverAnotherTenantsWorkerIdentifier()
+    {
+        var factory = CreateFactory();
+        var gateway = new PostgresWorkerGateway(factory);
+        var request = new RegisterWorkerRequest("worker_shared", "echo", [], "test", 1);
+        await gateway.RegisterAsync(request, CancellationToken.None, "tenant:one");
+
+        var exception = await Assert.ThrowsAsync<DomainException>(() => gateway.RegisterAsync(request, CancellationToken.None, "tenant:two"));
+
+        Assert.Equal("WORKER_ID_ALREADY_REGISTERED", exception.Message);
     }
 
     [Fact]

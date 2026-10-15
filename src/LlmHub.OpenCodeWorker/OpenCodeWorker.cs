@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace LlmHub.OpenCodeWorker;
 
-public sealed record OpenCodeWorkerOptions(string WorkerId, string Version, int PollSeconds, int HeartbeatSeconds = 15);
+public sealed record OpenCodeWorkerOptions(string WorkerId, string Version, int PollSeconds, int HeartbeatSeconds = 15, int ClaimWaitSeconds = 25);
 
 public sealed class OpenCodeWorker(
     IServiceScopeFactory scopeFactory,
@@ -44,12 +44,18 @@ public sealed class OpenCodeWorker(
             ClaimedRunResponse? claim;
             using (var scope = scopeFactory.CreateScope())
             {
-                claim = await scope.ServiceProvider.GetRequiredService<IWorkerGateway>().ClaimAsync(options.WorkerId, stoppingToken);
+                claim = await scope.ServiceProvider.GetRequiredService<IWorkerGateway>().ClaimAsync(
+                    options.WorkerId,
+                    stoppingToken,
+                    waitSeconds: options.ClaimWaitSeconds);
             }
 
             if (claim is null)
             {
-                await Task.Delay(TimeSpan.FromSeconds(options.PollSeconds), stoppingToken);
+                if (options.ClaimWaitSeconds == 0)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(options.PollSeconds), stoppingToken);
+                }
                 continue;
             }
 

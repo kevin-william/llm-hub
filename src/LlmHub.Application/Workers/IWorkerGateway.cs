@@ -6,7 +6,7 @@ public interface IWorkerGateway
 {
     Task RegisterAsync(RegisterWorkerRequest request, CancellationToken cancellationToken, string tenantId = "tenant:development");
 
-    Task<ClaimedRunResponse?> ClaimAsync(string workerId, CancellationToken cancellationToken);
+    Task<ClaimedRunResponse?> ClaimAsync(string workerId, CancellationToken cancellationToken, string tenantId = "tenant:development", int? waitSeconds = null);
 
     Task<HeartbeatResponse> HeartbeatAsync(string runId, HeartbeatRequest request, CancellationToken cancellationToken);
 

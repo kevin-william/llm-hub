@@ -36,9 +36,32 @@ public static class WorkerEndpointMappings
             return Results.Forbid();
         }
 
+        if (request.WaitSeconds is < 0 or > 30)
+        {
+            return Results.Problem("wait_seconds must be between 0 and 30.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
         try
         {
-            var claim = await gateway.ClaimAsync(workerId, cancellationToken);
+            var waitUntil = DateTimeOffset.UtcNow.AddSeconds(request.WaitSeconds ?? 0);
+            ClaimedRunResponse? claim;
+            do
+            {
+                claim = await gateway.ClaimAsync(workerId, cancellationToken, RequestIdentity.Tenant(httpContext));
+                if (claim is not null || request.WaitSeconds is null or 0)
+                {
+                    break;
+                }
+
+                var remaining = waitUntil - DateTimeOffset.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(250, remaining.TotalMilliseconds)), cancellationToken);
+            }
+            while (true);
             return claim is null ? Results.NoContent() : Results.Ok(claim);
         }
         catch (DomainException exception)

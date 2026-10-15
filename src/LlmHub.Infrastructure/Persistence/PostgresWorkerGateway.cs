@@ -23,6 +23,10 @@ public sealed class PostgresWorkerGateway(IDbContextFactory<HubDbContext> contex
 
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var worker = await context.Workers.SingleOrDefaultAsync(item => item.Id == request.WorkerId, cancellationToken);
+        if (worker is not null && worker.TenantId != tenantId)
+        {
+            throw new DomainException("WORKER_ID_ALREADY_REGISTERED");
+        }
         if (worker is null)
         {
             worker = new WorkerRecord { Id = request.WorkerId, RegisteredAt = DateTimeOffset.UtcNow };
@@ -49,10 +53,10 @@ public sealed class PostgresWorkerGateway(IDbContextFactory<HubDbContext> contex
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<ClaimedRunResponse?> ClaimAsync(string workerId, CancellationToken cancellationToken)
+    public async Task<ClaimedRunResponse?> ClaimAsync(string workerId, CancellationToken cancellationToken, string tenantId = "tenant:development", int? waitSeconds = null)
     {
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var worker = await context.Workers.SingleOrDefaultAsync(item => item.Id == workerId, cancellationToken)
+        var worker = await context.Workers.SingleOrDefaultAsync(item => item.Id == workerId && item.TenantId == tenantId, cancellationToken)
             ?? throw new DomainException("The worker is not registered.");
         var activeCount = await context.Runs.CountAsync(
             run => run.WorkerId == workerId && (run.State == RunState.Leased || run.State == RunState.Running), cancellationToken);

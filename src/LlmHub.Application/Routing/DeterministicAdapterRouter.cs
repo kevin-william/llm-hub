@@ -4,8 +4,6 @@ namespace LlmHub.Application.Routing;
 
 public static class DeterministicAdapterRouter
 {
-    private static readonly HashSet<string> SupportedAdapters = new(StringComparer.Ordinal) { "echo", "opencode" };
-
     public static string Resolve(string destination)
     {
         const string prefix = "agent:";
@@ -15,9 +13,10 @@ public static class DeterministicAdapterRouter
         }
 
         var adapter = destination[prefix.Length..].Split('/', 2)[0];
-        if (!SupportedAdapters.Contains(adapter))
+        if (adapter.Length is < 1 or > 64
+            || !adapter.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.'))
         {
-            throw new DomainException("ADAPTER_NOT_AVAILABLE");
+            throw new DomainException("The destination contains an invalid adapter identifier.");
         }
 
         return adapter;

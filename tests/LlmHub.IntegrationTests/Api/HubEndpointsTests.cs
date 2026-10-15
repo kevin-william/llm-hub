@@ -175,6 +175,36 @@ public sealed class HubEndpointsTests(HubApiFactory factory) : IClassFixture<Hub
         Assert.Contains(factory.ArtifactStore.UploadedArtifacts, item => item.ContentHash == expectedHash);
     }
 
+    [Fact]
+    public async Task RegisteredCustomWorkerReceivesWorkThroughALongPollingClaim()
+    {
+        using var client = factory.CreateClient();
+        const string workerId = "worker_generic_mcp";
+        var registration = await client.PostAsJsonAsync(
+            "/v1/workers/register",
+            new LlmHub.Contracts.Workers.RegisterWorkerRequest(workerId, "mcp-agent", ["chat"], "1.0", 1));
+        Assert.Equal(HttpStatusCode.NoContent, registration.StatusCode);
+
+        var claiming = client.PostAsJsonAsync(
+            $"/v1/workers/{workerId}/claims",
+            new LlmHub.Contracts.Workers.ClaimRequest(2));
+        await Task.Delay(100);
+
+        var channelResponse = await client.PostAsJsonAsync("/v1/channels", new OpenChannelRequest("agent:mcp-agent/default"));
+        var channel = await channelResponse.Content.ReadFromJsonAsync<ChannelResponse>();
+        Assert.Equal(HttpStatusCode.Created, channelResponse.StatusCode);
+        var send = await client.PostAsJsonAsync(
+            $"/v1/channels/{channel!.ChannelId}/messages",
+            new SendMessageRequest("long-poll-client", "Process this without model polling.", false));
+        Assert.Equal(HttpStatusCode.Accepted, send.StatusCode);
+
+        using var response = await claiming.WaitAsync(TimeSpan.FromSeconds(4));
+        var claim = await response.Content.ReadFromJsonAsync<LlmHub.Contracts.Workers.ClaimedRunResponse>();
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(channel.ChannelId, claim!.ChannelId);
+        Assert.Equal("Process this without model polling.", claim.Content);
+    }
+
     private static async Task<ChannelResponse> CreateChannelAsync(HttpClient client)
     {
         var response = await client.PostAsJsonAsync("/v1/channels", new OpenChannelRequest("agent:opencode/default"));

@@ -96,7 +96,7 @@ public sealed class OpenCodeWorkerTests
         public TaskCompletionSource<bool> SecondHeartbeat { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task RegisterAsync(RegisterWorkerRequest request, CancellationToken cancellationToken, string tenantId = "tenant:development") => Task.CompletedTask;
-        public Task<ClaimedRunResponse?> ClaimAsync(string workerId, CancellationToken cancellationToken) => Task.FromResult<ClaimedRunResponse?>(null);
+        public Task<ClaimedRunResponse?> ClaimAsync(string workerId, CancellationToken cancellationToken, string tenantId = "tenant:development", int? waitSeconds = null) => Task.FromResult<ClaimedRunResponse?>(null);
         public Task<HeartbeatResponse> HeartbeatAsync(string runId, HeartbeatRequest request, CancellationToken cancellationToken)
         {
             HeartbeatCount++;

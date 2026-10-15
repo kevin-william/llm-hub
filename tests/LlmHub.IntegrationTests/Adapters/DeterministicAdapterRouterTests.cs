@@ -26,6 +26,26 @@ public sealed class DeterministicAdapterRouterTests
         Assert.Equal("echo", (await verify.Runs.SingleAsync(run => run.Id == accepted.RunId)).Adapter);
     }
 
+    [Fact]
+    public async Task CustomAdapterDestinationCreatesRunWithoutChangingTheHubCore()
+    {
+        var options = new DbContextOptionsBuilder<HubDbContext>().UseInMemoryDatabase($"router-{Guid.NewGuid():N}").Options;
+        var factory = new TestDbContextFactory(options);
+        await using (var seed = await factory.CreateDbContextAsync(CancellationToken.None))
+        {
+            seed.Channels.Add(new ChannelRecord { Id = "chn_custom", Destination = "agent:local-llama/desktop", CreatedAt = DateTimeOffset.UtcNow });
+            seed.ChannelParticipants.Add(new ChannelParticipantRecord { ChannelId = "chn_custom", PrincipalId = "principal:router" });
+            await seed.SaveChangesAsync(CancellationToken.None);
+        }
+
+        var accepted = await new PostgresMessageAcceptanceService(factory).AcceptAsync(
+            new AcceptMessageCommand("chn_custom", "principal:router", "principal:router", "agent:opencode/default", "custom-client", "hello", false),
+            CancellationToken.None);
+        await using var verify = await factory.CreateDbContextAsync(CancellationToken.None);
+
+        Assert.Equal("local-llama", (await verify.Runs.SingleAsync(run => run.Id == accepted.RunId)).Adapter);
+    }
+
     private sealed class TestDbContextFactory(DbContextOptions<HubDbContext> options) : IDbContextFactory<HubDbContext>
     {
         public HubDbContext CreateDbContext() => new(options);
